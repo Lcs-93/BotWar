@@ -11,47 +11,51 @@ app.get("/", (req, res) => {
 });
 
 app.get('/action', (req, res) => {
-  const gameStateHeader = req.get('X-Game-State');
-  if (!gameStateHeader) {
-    return res.status(400).json({ error: 'Missing X-Game-State header' });
-  }
+    const gameState = JSON.parse(req.headers['x-game-state']);
+    const { x: botX, y: botY } = gameState.you;
+    const grid = gameState.grid;
 
-  const gameState = JSON.parse(gameStateHeader);
-  const { you, grid } = gameState;
+    const directions = [
+        { dx: 0, dy: -1, move: 'UP' },
+        { dx: 0, dy: 1, move: 'DOWN' },
+        { dx: -1, dy: 0, move: 'LEFT' },
+        { dx: 1, dy: 0, move: 'RIGHT' }
+    ];
 
-  const x = you.x;
-  const y = you.y;
+    let target = null;
+    let minDist = Infinity;
 
-  const directions = [
-    { dx: 0, dy: -1, move: "UP" },
-    { dx: 0, dy: 1, move: "DOWN" },
-    { dx: -1, dy: 0, move: "LEFT" },
-    { dx: 1, dy: 0, move: "RIGHT" }
-  ];
+    // Trouver la case avec un point ou un trophée le plus proche
+    for (let y = 0; y < grid.length; y++) {
+        for (let x = 0; x < grid[y].length; x++) {
+            const cell = grid[y][x];
+            const hasPoint = cell.points && cell.points.length > 0;
+            const hasTrophy = cell.points && cell.points.some(p => p.id === 'trophy');
 
-  // Check each adjacent cell
-  for (const dir of directions) {
-    const newX = x + dir.dx;
-    const newY = y + dir.dy;
-
-    // Check if new coordinates are within bounds
-    if (
-      newY >= 0 && newY < grid.length &&
-      newX >= 0 && newX < grid[0].length
-    ) {
-      const cell = grid[newY][newX];
-
-      const hasPoint = cell.points.length > 0;
-      const isSafe = cell.bombs.length === 0 && cell.bots.length === 0;
-
-      if (hasPoint && isSafe) {
-        return res.json({ move: dir.move, action: "NONE" });
-      }
+            if (hasPoint || hasTrophy) {
+                const dist = Math.abs(botX - x) + Math.abs(botY - y);
+                if (dist < minDist) {
+                    minDist = dist;
+                    target = { x, y };
+                }
+            }
+        }
     }
-  }
 
-  // Si aucun point autour, on reste en place
-  return res.json({ move: "STAY", action: "NONE" });
+    let move = 'STAY';
+
+    if (target) {
+        const dx = target.x - botX;
+        const dy = target.y - botY;
+
+        if (Math.abs(dx) > Math.abs(dy)) {
+            move = dx > 0 ? 'RIGHT' : 'LEFT';
+        } else if (dy !== 0) {
+            move = dy > 0 ? 'DOWN' : 'UP';
+        }
+    }
+
+    return res.json({ move, action: "NONE" });
 });
 
 app.listen(port , () => console.log("Le serveur tourne sur le port " + port));

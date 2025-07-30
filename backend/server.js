@@ -10,6 +10,10 @@ app.get("/", (req, res) => {
   res.send("Bot-War API is running. Try /action");
 });
 
+app.get("/action", (req, res) => {
+  res.send("Cette route doit être appelée en POST");
+});
+
 app.post("/action", (req, res) => {
   const gameState = req.body;
 

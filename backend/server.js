@@ -11,45 +11,46 @@ app.get("/", (req, res) => {
 });
 
 app.get("/", (req, res) => {
-  const query = req.query;
+  const board = JSON.parse(req.query.board);
+  const bot = JSON.parse(req.query.bot);
 
-  const board = JSON.parse(query.board); // grille du jeu
-  const bot = JSON.parse(query.bot);     // position du bot
-
-  const targetTypes = ["diamond", "trophy"];
   const botPos = { row: bot.position.row, col: bot.position.col };
+  const targetTypes = ["diamond", "trophy"];
 
-  // Trouve toutes les cibles utiles
+  // Filtrer les cibles sauf si déjà sur la position
   const targets = [];
   for (let row = 0; row < board.length; row++) {
     for (let col = 0; col < board[row].length; col++) {
-      if (targetTypes.includes(board[row][col])) {
-        targets.push({ row, col });
+      const cell = board[row][col];
+      if (targetTypes.includes(cell)) {
+        // Exclut la case si le bot est déjà dessus
+        if (row !== botPos.row || col !== botPos.col) {
+          targets.push({ row, col });
+        }
       }
     }
   }
 
-  // Pas de cible ? On reste
+  // Si y a une cible sur la position actuelle → collect
+  if (targetTypes.includes(board[botPos.row][botPos.col])) {
+    return res.json({ move: "STAY", action: "COLLECT" });
+  }
+
+  // Si aucune autre cible, rester
   if (targets.length === 0) {
     return res.json({ move: "STAY", action: "NONE" });
   }
 
-  // Fonction distance
+  // Trouver la plus proche
   function distance(a, b) {
     return Math.abs(a.row - b.row) + Math.abs(a.col - b.col);
   }
 
-  // Cible la plus proche
   const closest = targets.reduce((prev, curr) =>
     distance(botPos, curr) < distance(botPos, prev) ? curr : prev
   );
 
-  // Sur la cible ? Ramasse
-  if (botPos.row === closest.row && botPos.col === closest.col) {
-    return res.json({ move: "STAY", action: "COLLECT" });
-  }
-
-  // Sinon, se rapprocher
+  // Calculer le mouvement
   let move = "STAY";
   if (botPos.row < closest.row) move = "DOWN";
   else if (botPos.row > closest.row) move = "UP";

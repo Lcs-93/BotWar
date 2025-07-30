@@ -10,7 +10,7 @@ app.get("/", (req, res) => {
   res.send("Bot-War API is running. Try /action");
 });
 
-app.get("/", (req, res) => {
+app.get("/action", (req, res) => {
   const board = JSON.parse(req.query.board);
   const bot = JSON.parse(req.query.bot);
 

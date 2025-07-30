@@ -11,45 +11,11 @@ app.get("/", (req, res) => {
 });
 
 app.get("/action", (req, res) => {
-  const gameState = req.body || req.query || {};
-  const position = gameState.position || [2, 2];
-  const map = gameState.map || [[]];
-  const [x, y] = position;
-  const current = map?.[y]?.[x];
+  console.log("=== Nouvelle requête reçue ===");
+  console.log("Query params :", req.query);
 
-  // 1. Collecte si ressource
-  if (current === "diamond" || current === "trophy") {
-    return res.json({ move: "STAY", action: "COLLECT" });
-  }
-
-  // 2. Bombe si ennemi proche
-  if (isEnemyNearby(map, x, y)) {
-    return res.json({ move: "STAY", action: "BOMB", bombType: "proximity" });
-  }
-
-  // 3. Trouver une ressource
-  let target = null;
-  for (let j = 0; j < map.length; j++) {
-    for (let i = 0; i < map[j].length; i++) {
-      if (["trophy", "diamond"].includes(map[j][i])) {
-        target = [i, j];
-        break;
-      }
-    }
-    if (target) break;
-  }
-
-  // 4. Se déplacer vers la ressource
-  let move = "STAY";
-  if (target) {
-    const [tx, ty] = target;
-    if (tx < x) move = "LEFT";
-    else if (tx > x) move = "RIGHT";
-    else if (ty < y) move = "UP";
-    else if (ty > y) move = "DOWN";
-  }
-
-  return res.json({ move, action: "MOVE" });
+  // Exemple de réponse minimale
+  res.json({ move: "STAY", action: "NONE" });
 });
 
 app.listen(port , () => console.log("Le serveur tourne sur le port " + port));

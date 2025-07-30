@@ -11,7 +11,9 @@ app.get("/", (req, res) => {
 });
 
 app.get("/action", (req, res) => {
-  res.send("Cette route doit être appelée en POST");
+  res.json({
+    error: "Cette route doit être appelée en POST avec un JSON valide."
+  });
 });
 
 app.post("/action", (req, res) => {

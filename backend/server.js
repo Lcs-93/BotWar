@@ -10,7 +10,7 @@ app.get("/", (req, res) => {
   res.send("Bot-War API is running. Try /action");
 });
 
-app.get("/", (req, res) => {
+app.get("/action", (req, res) => {
   try {
     const query = req.query;
 

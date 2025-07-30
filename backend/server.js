@@ -11,22 +11,46 @@ app.get("/", (req, res) => {
 });
 
 app.get('/action', (req, res) => {
-  const gameStateHeader = req.header('X-Game-State');
+  const gameState = req.body || req.query; // selon comment c'est envoyé
+  const botPosition = gameState.position; // ex: [2, 2]
+  const map = gameState.map; // tableau 2D
 
-  if (!gameStateHeader) {
-    return res.status(400).json({ error: 'Missing X-Game-State header.' });
+  const [x, y] = botPosition;
+  const currentCell = map[y][x];
+
+  // Si sur une ressource : collecter
+  if (currentCell === 'diamond' || currentCell === 'trophy') {
+    return res.json({
+      move: 'STAY',
+      action: 'COLLECT'
+    });
   }
 
-  // Tu peux ici parser le header si besoin
-  const gameState = JSON.parse(gameStateHeader);
+  // Cherche la première ressource sur la grille
+  let target = null;
+  for (let row = 0; row < map.length; row++) {
+    for (let col = 0; col < map[row].length; col++) {
+      if (map[row][col] === 'diamond' || map[row][col] === 'trophy') {
+        target = [col, row]; // attention x = col, y = row
+        break;
+      }
+    }
+    if (target) break;
+  }
 
-  // Ta logique de bot ici (à améliorer selon les cas)
-  const response = {
-    move: "UP",
-    action: "COLLECT"
-  };
+  let move = 'STAY';
+  if (target) {
+    const [tx, ty] = target;
+    if (tx < x) move = 'LEFT';
+    else if (tx > x) move = 'RIGHT';
+    else if (ty < y) move = 'UP';
+    else if (ty > y) move = 'DOWN';
+  }
 
-  res.json(response);
+  res.json({
+    move,
+    action: 'MOVE'
+  });
 });
 
 app.listen(port , () => console.log("Le serveur tourne sur le port " + port));

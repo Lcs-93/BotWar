@@ -10,30 +10,33 @@ app.get("/", (req, res) => {
   res.send("Bot-War API is running. Try /action");
 });
 
+// Endpoint GET /action — utilisé par le simulateur
 app.get("/action", (req, res) => {
-  res.json({
-    error: "Cette route doit être appelée en POST avec un JSON valide."
-  });
-});
+  try {
+    const gameStateHeader = req.headers["x-game-state"];
+    if (!gameStateHeader) {
+      return res.status(400).json({ error: "Header X-Game-State manquant." });
+    }
 
-app.post("/action", (req, res) => {
-  const gameState = req.body;
+    const gameState = JSON.parse(gameStateHeader);
+    const bot = gameState.bot;
+    const grid = gameState.grid;
+    const x = bot.position.x;
+    const y = bot.position.y;
 
-  const bot = gameState.bot; // ton bot
-  const grid = gameState.grid; // grille 5x5
-  const x = bot.position.x;
-  const y = bot.position.y;
+    let move = "STAY";
+    let action = "NONE";
 
-  // Chercher un diamant à proximité (diamonds = 1pt)
-  let move = "STAY";
-  let action = "NONE";
+    if (x > 0 && grid[y][x - 1] === "diamond") move = "LEFT";
+    else if (x < 4 && grid[y][x + 1] === "diamond") move = "RIGHT";
+    else if (y > 0 && grid[y - 1][x] === "diamond") move = "UP";
+    else if (y < 4 && grid[y + 1][x] === "diamond") move = "DOWN";
 
-  if (x > 0 && grid[y][x - 1] === "diamond") move = "LEFT";
-  else if (x < 4 && grid[y][x + 1] === "diamond") move = "RIGHT";
-  else if (y > 0 && grid[y - 1][x] === "diamond") move = "UP";
-  else if (y < 4 && grid[y + 1][x] === "diamond") move = "DOWN";
+    res.json({ move, action });
 
-  res.json({ move, action });
+  } catch (err) {
+    res.status(500).json({ error: "Erreur lors de l'analyse du X-Game-State" });
+  }
 });
 
 app.listen(port , () => console.log("Le serveur tourne sur le port " + port));

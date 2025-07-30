@@ -12,13 +12,15 @@ app.get("/", (req, res) => {
 
 // Endpoint GET /action — utilisé par le simulateur
 app.get("/action", (req, res) => {
-  try {
-    const gameStateHeader = req.headers["x-game-state"];
-    if (!gameStateHeader) {
-      return res.status(400).json({ error: "Header X-Game-State manquant." });
-    }
+  const header = req.headers["x-game-state"];
 
-    const gameState = JSON.parse(gameStateHeader);
+  if (!header) {
+    console.log("❌ Header X-Game-State manquant");
+    return res.status(400).json({ error: "Header X-Game-State manquant" });
+  }
+
+  try {
+    const gameState = JSON.parse(header);
     const bot = gameState.bot;
     const grid = gameState.grid;
     const x = bot.position.x;
@@ -32,10 +34,10 @@ app.get("/action", (req, res) => {
     else if (y > 0 && grid[y - 1][x] === "diamond") move = "UP";
     else if (y < 4 && grid[y + 1][x] === "diamond") move = "DOWN";
 
-    res.json({ move, action });
-
+    return res.json({ move, action });
   } catch (err) {
-    res.status(500).json({ error: "Erreur lors de l'analyse du X-Game-State" });
+    console.error("❌ Erreur de parsing du header X-Game-State :", err);
+    return res.status(400).json({ error: "Mauvais format JSON dans X-Game-State" });
   }
 });
 

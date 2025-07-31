@@ -20,7 +20,9 @@ app.get('/action', (req, res) => {
 
     const enemies = (game.bots || []).filter(b => b.id !== myId);
     const bombs = game.bombs || [];
-    const points = [...(game.diamonds || []), ...(game.trophies || [])];
+    const diamonds = game.diamonds || [];
+    const trophies = game.trophies || [];
+    const points = [...trophies, ...diamonds]; // priorité trophées
     const myBombs = bombs.filter(b => b.owner === myId).length;
 
     const gridWidth = game.width || 5;
@@ -39,12 +41,21 @@ app.get('/action', (req, res) => {
       { dx: 1, dy: 0, move: 'RIGHT' }
     ];
 
-    // 1. Si point sous le bot → collecter
+    // 1. Si le bot est sur un point (trophée ou diamant) → collecter
     if (points.some(p => p.x === myX && p.y === myY)) {
       return res.json({ move: 'STAY', action: 'COLLECT' });
     }
 
-    // 2. Si ennemi adjacent → ATTACK
+    // 2. Si un point est adjacent → aller dessus et collecter
+    for (const d of dirs) {
+      const nx = myX + d.dx;
+      const ny = myY + d.dy;
+      if (isValid(nx, ny) && points.some(p => p.x === nx && p.y === ny) && !isDanger(nx, ny)) {
+        return res.json({ move: d.move, action: 'COLLECT' });
+      }
+    }
+
+    // 3. Si ennemi adjacent → attaque
     for (const d of dirs) {
       const nx = myX + d.dx;
       const ny = myY + d.dy;
@@ -53,35 +64,25 @@ app.get('/action', (req, res) => {
       }
     }
 
-    // 3. Si danger proche → ne rien faire ou bouger en sécurité
-    for (const d of dirs) {
-      const nx = myX + d.dx;
-      const ny = myY + d.dy;
-      if (isValid(nx, ny) && !isDanger(nx, ny)) {
-        return res.json({ move: d.move, action: 'NONE' });
-      }
-    }
-
-    // 4. Si ennemi à distance = 2 et pas trop de bombes → poser bombe timer
+    // 4. Si ennemi à distance = 2 et peu de bombes → poser bombe
     if (enemies.some(e => dist(me, e) === 2) && myBombs < 3) {
       return res.json({ move: 'STAY', action: 'BOMB', bombType: 'timer' });
     }
 
-    // 5. Sinon aller vers point le plus proche en évitant les bombes et ennemis
-    let best = null;
+    // 5. Aller vers le point le plus proche (en priorité trophées), en évitant le danger
+    let target = null;
     let minDist = Infinity;
     for (const p of points) {
       const d = dist(me, p);
       if (d < minDist && !isDanger(p.x, p.y)) {
-        best = p;
+        target = p;
         minDist = d;
       }
     }
 
-    if (best) {
-      // Choisir une direction vers la cible
-      const dx = best.x - myX;
-      const dy = best.y - myY;
+    if (target) {
+      const dx = target.x - myX;
+      const dy = target.y - myY;
       const moveFirst = Math.abs(dx) >= Math.abs(dy) ? ['x', 'y'] : ['y', 'x'];
 
       for (const axis of moveFirst) {
@@ -102,7 +103,7 @@ app.get('/action', (req, res) => {
       }
     }
 
-    // 6. Si bloqué → STAY
+    // 6. Si aucune action sûre → STAY
     return res.json({ move: 'STAY', action: 'NONE' });
 
   } catch (e) {
@@ -111,4 +112,4 @@ app.get('/action', (req, res) => {
   }
 });
 
-app.listen(port , () => console.log("Le serveur tourne sur le port " + port));
+app.listen(port, () => console.log("Le serveur tourne sur le port " + port));

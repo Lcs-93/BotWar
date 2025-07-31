@@ -11,51 +11,80 @@ app.get("/", (req, res) => {
 });
 
 app.get('/action', (req, res) => {
-    const gameState = JSON.parse(req.headers['x-game-state']);
-    const { x: botX, y: botY } = gameState.you;
-    const grid = gameState.grid;
+    try {
+        const gameState = JSON.parse(req.headers['x-game-state']);
+        const { x: botX, y: botY } = gameState.you;
+        const grid = gameState.grid;
 
-    const directions = [
-        { dx: 0, dy: -1, move: 'UP' },
-        { dx: 0, dy: 1, move: 'DOWN' },
-        { dx: -1, dy: 0, move: 'LEFT' },
-        { dx: 1, dy: 0, move: 'RIGHT' }
-    ];
+        // Analyser l'environnement
+        const environment = analyzeEnvironment(botX, botY, grid);
+        
+        // Déterminer le meilleur mouvement
+        let move = findBestMove(botX, botY, environment, gameState);
+        
+        // Si aucun mouvement sûr n'est trouvé, chercher le point le plus proche (comportement de fallback)
+        if (move === 'STAY' && !environment.currentCell.points) {
+            let target = null;
+            let minDist = Infinity;
 
-    let target = null;
-    let minDist = Infinity;
+            // Prioriser les trophées, puis les points normaux
+            const allRewards = [...environment.nearbyRewards];
+            if (gameState.megaPoint) {
+                allRewards.push({
+                    x: gameState.megaPoint.x,
+                    y: gameState.megaPoint.y,
+                    distance: manhattanDistance(botX, botY, gameState.megaPoint.x, gameState.megaPoint.y),
+                    type: 'mega',
+                    value: 20
+                });
+            }
 
-    // Trouver la case avec un point ou un trophée le plus proche
-    for (let y = 0; y < grid.length; y++) {
-        for (let x = 0; x < grid[y].length; x++) {
-            const cell = grid[y][x];
-            const hasPoint = cell.points && cell.points.length > 0;
-            const hasTrophy = cell.points && cell.points.some(p => p.id === 'trophy');
+            // Trier par valeur puis par distance
+            allRewards.sort((a, b) => {
+                if (a.value !== b.value) return b.value - a.value;
+                return a.distance - b.distance;
+            });
 
-            if (hasPoint || hasTrophy) {
-                const dist = Math.abs(botX - x) + Math.abs(botY - y);
-                if (dist < minDist) {
-                    minDist = dist;
-                    target = { x, y };
+            if (allRewards.length > 0) {
+                target = allRewards[0];
+                const dx = target.x - botX;
+                const dy = target.y - botY;
+
+                if (Math.abs(dx) > Math.abs(dy)) {
+                    move = dx > 0 ? 'RIGHT' : 'LEFT';
+                } else if (dy !== 0) {
+                    move = dy > 0 ? 'DOWN' : 'UP';
+                }
+
+                // Vérifier que le mouvement est sûr
+                const targetCell = environment.adjacentCells[move];
+                if (targetCell && targetCell.safety < 30) {
+                    move = 'STAY'; // Rester sur place si c'est dangereux
                 }
             }
         }
+        
+        // Déterminer l'action
+        const action = determineAction(botX, botY, environment, gameState);
+        
+        // Log pour debug (optionnel)
+        console.log(`Tour ${gameState.turnNumber}: Position (${botX},${botY}) -> Mouvement: ${move}, Action: ${action}`);
+        
+        return res.json({ 
+            move, 
+            action,
+            // Informations supplémentaires pour le debug
+            debug: {
+                currentSafety: environment.currentCell ? calculateCellSafety(botX, botY, grid) : 0,
+                threatsNearby: environment.nearbyThreats.length,
+                rewardsNearby: environment.nearbyRewards.length
+            }
+        });
+
+    } catch (error) {
+        console.error('Erreur lors du traitement de la requête:', error);
+        return res.json({ move: 'STAY', action: 'NONE' });
     }
-
-    let move = 'STAY';
-
-    if (target) {
-        const dx = target.x - botX;
-        const dy = target.y - botY;
-
-        if (Math.abs(dx) > Math.abs(dy)) {
-            move = dx > 0 ? 'RIGHT' : 'LEFT';
-        } else if (dy !== 0) {
-            move = dy > 0 ? 'DOWN' : 'UP';
-        }
-    }
-
-    return res.json({ move, action: "NONE" });
 });
 
 app.listen(port , () => console.log("Le serveur tourne sur le port " + port));

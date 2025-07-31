@@ -30,27 +30,39 @@ app.get("/action", (req, res) => {
     
     console.log(`🤖 MOI: ID=${myId}, Position=(${myX},${myY})`);
     
-    const enemies = (game.bots || []).filter(b => b.id !== myId);
-    const bombs = game.bombs || [];
-    const trophies = game.trophies || [];
-    const diamonds = game.diamonds || [];
-    const points = [...trophies, ...diamonds];
+    // Adapter aux structures de données de l'API BotWar
+    const enemies = (game.otherBots || []).filter(b => b.id !== myId);
+
+    // Extraire les bombes présentes dans la grille
+    const bombs = [];
+    if (Array.isArray(game.grid)) {
+      game.grid.forEach((row, y) => {
+        row.forEach((cell, x) => {
+          if (cell.bombs && cell.bombs.length > 0) {
+            cell.bombs.forEach(b => bombs.push({ x, y, ...b }));
+          }
+        });
+      });
+    }
+
+    // Points classiques + éventuel méga point
+    const points = Array.isArray(game.points) ? [...game.points] : [];
+    if (game.megaPoint) {
+      points.push({ ...game.megaPoint, mega: true });
+    }
     
     console.log(`📊 Statistiques:`);
     console.log(`   - Ennemis: ${enemies.length}`);
     console.log(`   - Bombes: ${bombs.length}`);
-    console.log(`   - Trophées: ${trophies.length}`);
-    console.log(`   - Diamants: ${diamonds.length}`);
-    console.log(`   - Points totaux: ${points.length}`);
+    console.log(`   - Points: ${points.length}`);
     
     if (points.length > 0) {
       console.log("🎯 POINTS disponibles:");
       points.forEach((p, i) => console.log(`   ${i+1}. (${p.x},${p.y}) distance=${Math.abs(p.x-myX) + Math.abs(p.y-myY)}`));
     }
     
-    const myBombs = bombs.filter(b => b.owner === myId).length;
-    const gridWidth = game.width || 5;
-    const gridHeight = game.height || 5;
+    const gridWidth = game.grid?.[0]?.length || 5;
+    const gridHeight = game.grid?.length || 5;
 
     // Fonctions utilitaires
     const isValid = (x, y) => x >= 0 && y >= 0 && x < gridWidth && y < gridHeight;
@@ -144,13 +156,12 @@ app.get("/action", (req, res) => {
     // Évaluer la valeur d'un point (distance + valeur intrinsèque)
     const evaluatePoint = (point) => {
       const distance = dist(me, point);
-      const isDiamond = diamonds.some(d => d.x === point.x && d.y === point.y);
-      const baseValue = isDiamond ? 20 : 10; // Diamants plus précieux
-      
+      const baseValue = point.mega ? 20 : 10;
+
       // Malus si des ennemis sont proches du point
       const enemyNearby = enemies.some(e => dist(e, point) <= 2);
       const enemyMalus = enemyNearby ? 5 : 0;
-      
+
       return baseValue - distance - enemyMalus;
     };
 
@@ -174,8 +185,14 @@ app.get("/action", (req, res) => {
     console.log("🎯 Vérification si je suis SUR un point...");
     const pointOnMyPosition = points.find(p => p.x === myX && p.y === myY);
     if (pointOnMyPosition) {
-      console.log("✅ COLLECTE SUR PLACE - Je suis sur un point!");
-      return res.json({ move: "STAY", action: "COLLECT" });
+      console.log("✅ POINT SOUS MOI - COLLECTE EN SE DÉPLAÇANT");
+      for (const dir of dirs) {
+        const nx = myX + dir.dx;
+        const ny = myY + dir.dy;
+        if (isValid(nx, ny) && !isDanger(nx, ny) && !isOccupied(nx, ny)) {
+          return res.json({ move: dir.move, action: "COLLECT" });
+        }
+      }
     }
 
     // STRATÉGIE 2: Aller vers le point le plus proche  
@@ -198,8 +215,14 @@ app.get("/action", (req, res) => {
       
       // Si je suis déjà sur le point, collecter
       if (closestPoint.x === myX && closestPoint.y === myY) {
-        console.log("✅ JE SUIS SUR LE POINT - COLLECT!");
-        return res.json({ move: "STAY", action: "COLLECT" });
+        console.log("✅ JE SUIS SUR LE POINT - COLLECT EN SE DÉPLAÇANT!");
+        for (const dir of dirs) {
+          const nx = myX + dir.dx;
+          const ny = myY + dir.dy;
+          if (isValid(nx, ny) && !isDanger(nx, ny) && !isOccupied(nx, ny)) {
+            return res.json({ move: dir.move, action: "COLLECT" });
+          }
+        }
       }
       
       // Mouvement simple vers le point

@@ -22,7 +22,7 @@ app.get("/action", (req, res) => {
     const bombs = game.bombs || [];
     const trophies = game.trophies || [];
     const diamonds = game.diamonds || [];
-    const points = [...trophies, ...diamonds]; // priorité trophée
+    const points = [...trophies, ...diamonds];
     const myBombs = bombs.filter(b => b.owner === myId).length;
 
     const gridWidth = game.width || 5;
@@ -39,11 +39,12 @@ app.get("/action", (req, res) => {
     ];
 
     const isDanger = (x, y) =>
-      bombs.some(b => dist({ x, y }, b) <= 1); // bombe sur ou adjacent
+      bombs.some(b => dist({ x, y }, b) <= 1);
 
-    const isEnemy = (x, y) => enemies.some(e => e.x === x && e.y === y);
+    const isEnemy = (x, y) =>
+      enemies.some(e => e.x === x && e.y === y);
 
-    // 1. Point adjacent ? → go collect (sans aller sur bombe)
+    // 1. COLLECT adjacent ?
     for (const d of dirs) {
       const nx = myX + d.dx;
       const ny = myY + d.dy;
@@ -56,7 +57,7 @@ app.get("/action", (req, res) => {
       }
     }
 
-    // 2. Ennemi adjacent → attaque
+    // 2. ATTACK adjacent ?
     for (const d of dirs) {
       const nx = myX + d.dx;
       const ny = myY + d.dy;
@@ -65,40 +66,29 @@ app.get("/action", (req, res) => {
       }
     }
 
-    // 3. Ennemi proche ? → poser bombe si on a moins de 3
+    // 3. BOMBER si ennemi proche
     if (enemies.some(e => dist(me, e) <= 2) && myBombs < 3) {
       return res.json({ move: "STAY", action: "BOMB", bombType: "timer" });
     }
 
-    // 4. Aller vers point le plus proche sans danger
-    let target = null;
-    let minD = Infinity;
-    for (const p of points) {
-      const d = dist(me, p);
-      if (d < minD) {
-        minD = d;
-        target = p;
-      }
-    }
+    // 4. Aller vers un point (même indirectement)
+    if (points.length > 0) {
+      points.sort((a, b) => dist(me, a) - dist(me, b)); // par plus proche
 
-    if (target) {
-      const dx = target.x - myX;
-      const dy = target.y - myY;
+      for (const point of points) {
+        const dx = point.x - myX;
+        const dy = point.y - myY;
 
-      const preferred = Math.abs(dx) >= Math.abs(dy) ? ["x", "y"] : ["y", "x"];
+        const moves = [];
 
-      for (const axis of preferred) {
-        let dir = null;
-        if (axis === "x" && dx !== 0) {
-          dir = dirs.find(d => d.dx === Math.sign(dx));
-        }
-        if (axis === "y" && dy !== 0) {
-          dir = dirs.find(d => d.dy === Math.sign(dy));
-        }
-        if (dir) {
+        if (dx < 0) moves.push(dirs.find(d => d.move === "LEFT"));
+        if (dx > 0) moves.push(dirs.find(d => d.move === "RIGHT"));
+        if (dy < 0) moves.push(dirs.find(d => d.move === "UP"));
+        if (dy > 0) moves.push(dirs.find(d => d.move === "DOWN"));
+
+        for (const dir of moves) {
           const nx = myX + dir.dx;
           const ny = myY + dir.dy;
-
           if (isValid(nx, ny) && !isDanger(nx, ny)) {
             const isPoint = points.some(p => p.x === nx && p.y === ny);
             return res.json({
@@ -110,7 +100,6 @@ app.get("/action", (req, res) => {
       }
     }
 
-    // 5. Aucun objectif safe ? → rester
     return res.json({ move: "STAY", action: "NONE" });
   } catch (e) {
     console.error("Erreur:", e);
@@ -118,4 +107,4 @@ app.get("/action", (req, res) => {
   }
 });
 
-app.listen(port, () => console.log("Le serveur tourne sur le port " + port));
+app.listen(port, () => console.log("Serveur OK sur le port " + port));

@@ -13,16 +13,40 @@ app.get("/", (req, res) => {
 app.get("/action", (req, res) => {
   try {
     const game = JSON.parse(req.headers["x-game-state"]);
+    
+    // DEBUG: Afficher l'état complet du jeu
+    console.log("=== ÉTAT DU JEU ===");
+    console.log("Game data:", JSON.stringify(game, null, 2));
+    
     const me = game.you;
+    if (!me) {
+      console.log("❌ Pas de données 'you' dans le jeu");
+      return res.json({ move: "STAY", action: "NONE" });
+    }
+    
     const myId = me.id;
     const myX = me.x;
     const myY = me.y;
+    
+    console.log(`🤖 MOI: ID=${myId}, Position=(${myX},${myY})`);
     
     const enemies = (game.bots || []).filter(b => b.id !== myId);
     const bombs = game.bombs || [];
     const trophies = game.trophies || [];
     const diamonds = game.diamonds || [];
     const points = [...trophies, ...diamonds];
+    
+    console.log(`📊 Statistiques:`);
+    console.log(`   - Ennemis: ${enemies.length}`);
+    console.log(`   - Bombes: ${bombs.length}`);
+    console.log(`   - Trophées: ${trophies.length}`);
+    console.log(`   - Diamants: ${diamonds.length}`);
+    console.log(`   - Points totaux: ${points.length}`);
+    
+    if (points.length > 0) {
+      console.log("🎯 POINTS disponibles:");
+      points.forEach((p, i) => console.log(`   ${i+1}. (${p.x},${p.y}) distance=${Math.abs(p.x-myX) + Math.abs(p.y-myY)}`));
+    }
     
     const myBombs = bombs.filter(b => b.owner === myId).length;
     const gridWidth = game.width || 5;
@@ -130,135 +154,108 @@ app.get("/action", (req, res) => {
       return baseValue - distance - enemyMalus;
     };
 
-    // STRATÉGIE 1: Collecte immédiate adjacente
+    // STRATÉGIE SIMPLIFIÉE 1: Collecte immédiate adjacente
+    console.log("🔍 Vérification collecte immédiate...");
     for (const d of dirs) {
       const nx = myX + d.dx;
       const ny = myY + d.dy;
-      if (isValid(nx, ny) && points.some(p => p.x === nx && p.y === ny) && !isDanger(nx, ny)) {
-        console.log("Collecte immédiate:", d.move);
+      const hasPoint = points.some(p => p.x === nx && p.y === ny);
+      const isDangerousSpot = isDanger(nx, ny);
+      
+      console.log(`   ${d.move}: (${nx},${ny}) - Point:${hasPoint}, Danger:${isDangerousSpot}`);
+      
+      if (isValid(nx, ny) && hasPoint && !isDangerousSpot) {
+        console.log("✅ COLLECTE IMMÉDIATE:", d.move);
         return res.json({ move: d.move, action: "COLLECT" });
       }
     }
 
-    // STRATÉGIE 2: Attaque adjacente
-    for (const d of dirs) {
-      const nx = myX + d.dx;
-      const ny = myY + d.dy;
-      if (isEnemy(nx, ny) && !isDanger(nx, ny)) {
-        console.log("Attaque:", d.move);
-        return res.json({ move: d.move, action: "ATTACK" });
-      }
-    }
-
-    // STRATÉGIE 3: Poser une bombe stratégique
-    const shouldBomb = () => {
-      if (myBombs >= 3) return false;
-      
-      // Bomber si ennemi très proche
-      const closeEnemies = enemies.filter(e => dist(me, e) <= 2);
-      if (closeEnemies.length > 0) return true;
-      
-      // Bomber près d'un point pour le protéger/bloquer les ennemis
-      const nearbyPoints = points.filter(p => dist(me, p) <= 2);
-      const enemiesNearPoints = enemies.filter(e => 
-        nearbyPoints.some(p => dist(e, p) <= 2)
-      );
-      
-      return enemiesNearPoints.length > 0;
-    };
-
-    if (shouldBomb()) {
-      console.log("Pose bombe stratégique");
-      return res.json({ move: "STAY", action: "BOMB", bombType: "proximity" });
-    }
-
-    // STRATÉGIE 4: Navigation intelligente vers le meilleur point
+    // STRATÉGIE SIMPLIFIÉE 2: Aller vers le point le plus proche
     if (points.length > 0) {
-      // Évaluer et trier les points par valeur
-      const evaluatedPoints = points
-        .map(p => ({ ...p, value: evaluatePoint(p) }))
-        .sort((a, b) => b.value - a.value);
+      console.log("🎯 Navigation vers le point le plus proche...");
       
-      console.log("Points évalués:", evaluatedPoints.map(p => 
-        `(${p.x},${p.y}) val:${p.value}`
-      ));
+      // Trouver le point le plus proche
+      let closestPoint = points[0];
+      let closestDist = dist(me, closestPoint);
       
-      // Essayer de trouver un chemin vers les meilleurs points
-      for (const targetPoint of evaluatedPoints.slice(0, 3)) {
-        const path = findPath(me, targetPoint);
-        
-        if (path && path.length > 0) {
-          const nextStep = path[0];
-          const direction = dirs.find(d => 
-            myX + d.dx === nextStep.x && myY + d.dy === nextStep.y
-          );
-          
-          if (direction) {
-            const isTargetPoint = points.some(p => p.x === nextStep.x && p.y === nextStep.y);
-            console.log("Navigation vers:", targetPoint, "prochaine étape:", nextStep);
-            
-            return res.json({
-              move: direction.move,
-              action: isTargetPoint ? "COLLECT" : "NONE",
-            });
-          }
+      for (const point of points) {
+        const d = dist(me, point);
+        if (d < closestDist) {
+          closestDist = d;
+          closestPoint = point;
         }
       }
+      
+      console.log(`🎯 Point cible: (${closestPoint.x},${closestPoint.y}) distance=${closestDist}`);
+      
+      // Mouvement simple vers le point (pas de pathfinding complexe)
+      const dx = closestPoint.x - myX;
+      const dy = closestPoint.y - myY;
+      
+      console.log(`📐 Delta: dx=${dx}, dy=${dy}`);
+      
+      // Prioriser le mouvement le plus important (horizontal ou vertical)
+      const possibleMoves = [];
+      
+      if (dx > 0) possibleMoves.push({ dir: dirs.find(d => d.move === "RIGHT"), priority: Math.abs(dx) });
+      if (dx < 0) possibleMoves.push({ dir: dirs.find(d => d.move === "LEFT"), priority: Math.abs(dx) });
+      if (dy > 0) possibleMoves.push({ dir: dirs.find(d => d.move === "DOWN"), priority: Math.abs(dy) });
+      if (dy < 0) possibleMoves.push({ dir: dirs.find(d => d.move === "UP"), priority: Math.abs(dy) });
+      
+      // Trier par priorité (plus grande distance d'abord)
+      possibleMoves.sort((a, b) => b.priority - a.priority);
+      
+      console.log("🚶 Mouvements possibles:", possibleMoves.map(m => `${m.dir.move}(${m.priority})`));
+      
+      // Essayer chaque mouvement par ordre de priorité
+      for (const moveData of possibleMoves) {
+        const dir = moveData.dir;
+        const nx = myX + dir.dx;
+        const ny = myY + dir.dy;
+        
+        const isValidMove = isValid(nx, ny);
+        const isDangerousMove = isDanger(nx, ny);
+        const isOccupiedMove = isOccupied(nx, ny);
+        
+        console.log(`   Teste ${dir.move}: (${nx},${ny}) - Valid:${isValidMove}, Danger:${isDangerousMove}, Occupé:${isOccupiedMove}`);
+        
+        if (isValidMove && !isDangerousMove && !isOccupiedMove) {
+          const willCollectPoint = points.some(p => p.x === nx && p.y === ny);
+          console.log(`✅ MOUVEMENT: ${dir.move} ${willCollectPoint ? '+ COLLECT' : ''}`);
+          
+          return res.json({
+            move: dir.move,
+            action: willCollectPoint ? "COLLECT" : "NONE",
+          });
+        }
+      }
+      
+      console.log("⚠️ Aucun mouvement sûr vers le point cible");
     }
 
-    // STRATÉGIE 5: Éviter les dangers et explorer
+    // STRATÉGIE 3: Mouvement d'exploration sûr
+    console.log("🔄 Recherche mouvement d'exploration...");
     const safeMoves = dirs.filter(d => {
       const nx = myX + d.dx;
       const ny = myY + d.dy;
-      return isValid(nx, ny) && !isDanger(nx, ny) && !isOccupied(nx, ny);
+      const isValidMove = isValid(nx, ny);
+      const isDangerousMove = isDanger(nx, ny);
+      const isOccupiedMove = isOccupied(nx, ny);
+      
+      console.log(`   ${d.move}: (${nx},${ny}) - Valid:${isValidMove}, Danger:${isDangerousMove}, Occupé:${isOccupiedMove}`);
+      
+      return isValidMove && !isDangerousMove && !isOccupiedMove;
     });
 
     if (safeMoves.length > 0) {
-      // Préférer se rapprocher du centre ou des points
-      let bestMove = safeMoves[0];
-      let bestScore = -1000;
-      
-      for (const move of safeMoves) {
-        const nx = myX + move.dx;
-        const ny = myY + move.dy;
-        
-        // Score basé sur la proximité aux points et position centrale
-        let score = 0;
-        const centerX = Math.floor(gridWidth / 2);
-        const centerY = Math.floor(gridHeight / 2);
-        
-        // Bonus pour se rapprocher du centre
-        const centerDist = dist({ x: nx, y: ny }, { x: centerX, y: centerY });
-        score += (gridWidth + gridHeight - centerDist) * 2;
-        
-        // Bonus pour se rapprocher des points
-        if (points.length > 0) {
-          const closestPointDist = Math.min(...points.map(p => dist({ x: nx, y: ny }, p)));
-          score += (gridWidth + gridHeight - closestPointDist) * 3;
-        }
-        
-        // Malus pour se rapprocher des ennemis (sauf si on peut attaquer)
-        for (const enemy of enemies) {
-          const enemyDist = dist({ x: nx, y: ny }, enemy);
-          if (enemyDist === 1) {
-            score += 10; // Bonus si on peut attaquer au prochain tour
-          } else if (enemyDist <= 3) {
-            score -= 5; // Malus pour être trop proche
-          }
-        }
-        
-        if (score > bestScore) {
-          bestScore = score;
-          bestMove = move;
-        }
-      }
-      
-      console.log("Mouvement d'exploration:", bestMove.move, "score:", bestScore);
-      return res.json({ move: bestMove.move, action: "NONE" });
+      // Choisir un mouvement aléatoire parmi les sûrs pour éviter les boucles
+      const randomMove = safeMoves[Math.floor(Math.random() * safeMoves.length)];
+      console.log(`✅ MOUVEMENT D'EXPLORATION: ${randomMove.move}`);
+      return res.json({ move: randomMove.move, action: "NONE" });
     }
 
-    // STRATÉGIE 6: Dernier recours - rester immobile
-    console.log("Aucun mouvement sûr - reste immobile");
+    // STRATÉGIE 4: Dernier recours - rester immobile
+    console.log("🛑 DERNIER RECOURS - Rester immobile");
     return res.json({ move: "STAY", action: "NONE" });
     
   } catch (e) {

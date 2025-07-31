@@ -170,7 +170,15 @@ app.get("/action", (req, res) => {
       }
     }
 
-    // STRATÉGIE SIMPLIFIÉE 2: Aller vers le point le plus proche
+    // STRATÉGIE 1.5: Se déplacer sur un point (au lieu d'à côté)
+    console.log("🎯 Vérification si je suis SUR un point...");
+    const pointOnMyPosition = points.find(p => p.x === myX && p.y === myY);
+    if (pointOnMyPosition) {
+      console.log("✅ COLLECTE SUR PLACE - Je suis sur un point!");
+      return res.json({ move: "STAY", action: "COLLECT" });
+    }
+
+    // STRATÉGIE 2: Aller vers le point le plus proche  
     if (points.length > 0) {
       console.log("🎯 Navigation vers le point le plus proche...");
       
@@ -188,44 +196,68 @@ app.get("/action", (req, res) => {
       
       console.log(`🎯 Point cible: (${closestPoint.x},${closestPoint.y}) distance=${closestDist}`);
       
-      // Mouvement simple vers le point (pas de pathfinding complexe)
+      // Si je suis déjà sur le point, collecter
+      if (closestPoint.x === myX && closestPoint.y === myY) {
+        console.log("✅ JE SUIS SUR LE POINT - COLLECT!");
+        return res.json({ move: "STAY", action: "COLLECT" });
+      }
+      
+      // Mouvement simple vers le point
       const dx = closestPoint.x - myX;
       const dy = closestPoint.y - myY;
       
       console.log(`📐 Delta: dx=${dx}, dy=${dy}`);
       
-      // Prioriser le mouvement le plus important (horizontal ou vertical)
+      // Essayer d'aller directement vers le point
+      let preferredMove = null;
+      
+      // Choisir le mouvement qui réduit le plus la distance
+      if (Math.abs(dx) > Math.abs(dy)) {
+        // Mouvement horizontal prioritaire
+        preferredMove = dx > 0 ? dirs.find(d => d.move === "RIGHT") : dirs.find(d => d.move === "LEFT");
+      } else {
+        // Mouvement vertical prioritaire  
+        preferredMove = dy > 0 ? dirs.find(d => d.move === "DOWN") : dirs.find(d => d.move === "UP");
+      }
+      
+      if (preferredMove) {
+        const nx = myX + preferredMove.dx;
+        const ny = myY + preferredMove.dy;
+        
+        const canMove = isValid(nx, ny) && !isDanger(nx, ny) && !isOccupied(nx, ny);
+        console.log(`🚶 Mouvement préféré ${preferredMove.move}: (${nx},${ny}) - Possible:${canMove}`);
+        
+        if (canMove) {
+          // Vérifier si on va arriver sur le point
+          const willBeOnPoint = closestPoint.x === nx && closestPoint.y === ny;
+          console.log(`✅ MOUVEMENT: ${preferredMove.move} ${willBeOnPoint ? '+ COLLECT SUR ARRIVÉE' : ''}`);
+          
+          return res.json({
+            move: preferredMove.move,
+            action: willBeOnPoint ? "COLLECT" : "NONE",
+          });
+        }
+      }
+      
+      // Si le mouvement préféré n'est pas possible, essayer tous les mouvements
       const possibleMoves = [];
       
-      if (dx > 0) possibleMoves.push({ dir: dirs.find(d => d.move === "RIGHT"), priority: Math.abs(dx) });
-      if (dx < 0) possibleMoves.push({ dir: dirs.find(d => d.move === "LEFT"), priority: Math.abs(dx) });
-      if (dy > 0) possibleMoves.push({ dir: dirs.find(d => d.move === "DOWN"), priority: Math.abs(dy) });
-      if (dy < 0) possibleMoves.push({ dir: dirs.find(d => d.move === "UP"), priority: Math.abs(dy) });
+      if (dx > 0) possibleMoves.push(dirs.find(d => d.move === "RIGHT"));
+      if (dx < 0) possibleMoves.push(dirs.find(d => d.move === "LEFT"));
+      if (dy > 0) possibleMoves.push(dirs.find(d => d.move === "DOWN"));
+      if (dy < 0) possibleMoves.push(dirs.find(d => d.move === "UP"));
       
-      // Trier par priorité (plus grande distance d'abord)
-      possibleMoves.sort((a, b) => b.priority - a.priority);
-      
-      console.log("🚶 Mouvements possibles:", possibleMoves.map(m => `${m.dir.move}(${m.priority})`));
-      
-      // Essayer chaque mouvement par ordre de priorité
-      for (const moveData of possibleMoves) {
-        const dir = moveData.dir;
+      for (const dir of possibleMoves) {
         const nx = myX + dir.dx;
         const ny = myY + dir.dy;
         
-        const isValidMove = isValid(nx, ny);
-        const isDangerousMove = isDanger(nx, ny);
-        const isOccupiedMove = isOccupied(nx, ny);
-        
-        console.log(`   Teste ${dir.move}: (${nx},${ny}) - Valid:${isValidMove}, Danger:${isDangerousMove}, Occupé:${isOccupiedMove}`);
-        
-        if (isValidMove && !isDangerousMove && !isOccupiedMove) {
-          const willCollectPoint = points.some(p => p.x === nx && p.y === ny);
-          console.log(`✅ MOUVEMENT: ${dir.move} ${willCollectPoint ? '+ COLLECT' : ''}`);
+        if (isValid(nx, ny) && !isDanger(nx, ny) && !isOccupied(nx, ny)) {
+          const willBeOnPoint = closestPoint.x === nx && closestPoint.y === ny;
+          console.log(`✅ MOUVEMENT ALTERNATIF: ${dir.move} ${willBeOnPoint ? '+ COLLECT' : ''}`);
           
           return res.json({
             move: dir.move,
-            action: willCollectPoint ? "COLLECT" : "NONE",
+            action: willBeOnPoint ? "COLLECT" : "NONE",
           });
         }
       }

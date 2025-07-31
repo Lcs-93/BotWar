@@ -22,7 +22,7 @@ app.get('/action', (req, res) => {
     const bombs = game.bombs || [];
     const diamonds = game.diamonds || [];
     const trophies = game.trophies || [];
-    const points = [...trophies, ...diamonds]; // priorité trophée
+    const points = [...trophies, ...diamonds];
     const myBombs = bombs.filter(b => b.owner === myId).length;
 
     const gridWidth = game.width || 5;
@@ -30,9 +30,6 @@ app.get('/action', (req, res) => {
 
     const isValid = (x, y) => x >= 0 && y >= 0 && x < gridWidth && y < gridHeight;
     const dist = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
-    const isBomb = (x, y) => bombs.some(b => b.x === x && b.y === y);
-    const isEnemy = (x, y) => enemies.some(e => e.x === x && e.y === y);
-    const isDanger = (x, y) => isBomb(x, y); // ⚠️ Ne compte plus les ennemis comme danger (sauf attaque)
 
     const dirs = [
       { dx: 0, dy: -1, move: 'UP' },
@@ -40,6 +37,13 @@ app.get('/action', (req, res) => {
       { dx: -1, dy: 0, move: 'LEFT' },
       { dx: 1, dy: 0, move: 'RIGHT' }
     ];
+
+    // Danger = bombes adjacentes uniquement
+    const isDanger = (x, y) => bombs.some(b =>
+      (Math.abs(b.x - x) + Math.abs(b.y - y)) === 1
+    );
+
+    const isEnemy = (x, y) => enemies.some(e => e.x === x && e.y === y);
 
     // 1. Si sur un point → collecter
     if (points.some(p => p.x === myX && p.y === myY)) {
@@ -50,7 +54,7 @@ app.get('/action', (req, res) => {
     for (const d of dirs) {
       const nx = myX + d.dx;
       const ny = myY + d.dy;
-      if (isValid(nx, ny) && points.some(p => p.x === nx && p.y === ny)) {
+      if (isValid(nx, ny) && points.some(p => p.x === nx && p.y === ny) && !isDanger(nx, ny)) {
         return res.json({ move: d.move, action: 'COLLECT' });
       }
     }
@@ -64,12 +68,12 @@ app.get('/action', (req, res) => {
       }
     }
 
-    // 4. Si ennemi à distance 2 et pas trop de bombes → poser bombe
+    // 4. Si ennemi à distance 2 et moins de 3 bombes → poser bombe
     if (enemies.some(e => dist(me, e) === 2) && myBombs < 3) {
       return res.json({ move: 'STAY', action: 'BOMB', bombType: 'timer' });
     }
 
-    // 5. Aller vers point le plus proche (même si bombes autour)
+    // 5. Aller vers point le plus proche (évite seulement bombes à côté)
     let target = null;
     let minDist = Infinity;
     for (const p of points) {
@@ -83,9 +87,9 @@ app.get('/action', (req, res) => {
     if (target) {
       const dx = target.x - myX;
       const dy = target.y - myY;
-      const moveFirst = Math.abs(dx) >= Math.abs(dy) ? ['x', 'y'] : ['y', 'x'];
+      const movePriority = Math.abs(dx) >= Math.abs(dy) ? ['x', 'y'] : ['y', 'x'];
 
-      for (const axis of moveFirst) {
+      for (const axis of movePriority) {
         let dir;
         if (axis === 'x' && dx !== 0) {
           dir = dirs.find(d => d.dx === Math.sign(dx));
@@ -96,14 +100,13 @@ app.get('/action', (req, res) => {
         if (dir) {
           const nx = myX + dir.dx;
           const ny = myY + dir.dy;
-          if (isValid(nx, ny)) {
+          if (isValid(nx, ny) && !isDanger(nx, ny)) {
             return res.json({ move: dir.move, action: 'NONE' });
           }
         }
       }
     }
 
-    // 6. Rien d’autre → STAY
     return res.json({ move: 'STAY', action: 'NONE' });
 
   } catch (e) {

@@ -83,14 +83,6 @@ test("does not attack if enemy is on bomb", () => {
   expect(res.action).not.toBe("ATTACK");
 });
 
-test("should NOT move LEFT when point is RIGHT", () => {
-  const state = {
-    ...baseState,
-    points: [{ x: 2, y: 1 }],
-  };
-  expect(decideMove(state)).toEqual({ move: "LEFT", action: "COLLECT" }); // Faux exprès
-});
-
 
 test("should not bomb if no bombs left", () => {
   const state = {

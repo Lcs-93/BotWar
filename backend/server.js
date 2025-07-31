@@ -22,7 +22,7 @@ app.get('/action', (req, res) => {
     const bombs = game.bombs || [];
     const diamonds = game.diamonds || [];
     const trophies = game.trophies || [];
-    const points = [...trophies, ...diamonds]; // priorité trophées
+    const points = [...trophies, ...diamonds]; // priorité trophée
     const myBombs = bombs.filter(b => b.owner === myId).length;
 
     const gridWidth = game.width || 5;
@@ -32,7 +32,7 @@ app.get('/action', (req, res) => {
     const dist = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
     const isBomb = (x, y) => bombs.some(b => b.x === x && b.y === y);
     const isEnemy = (x, y) => enemies.some(e => e.x === x && e.y === y);
-    const isDanger = (x, y) => isBomb(x, y) || isEnemy(x, y);
+    const isDanger = (x, y) => isBomb(x, y); // ⚠️ Ne compte plus les ennemis comme danger (sauf attaque)
 
     const dirs = [
       { dx: 0, dy: -1, move: 'UP' },
@@ -41,16 +41,16 @@ app.get('/action', (req, res) => {
       { dx: 1, dy: 0, move: 'RIGHT' }
     ];
 
-    // 1. Si le bot est sur un point (trophée ou diamant) → collecter
+    // 1. Si sur un point → collecter
     if (points.some(p => p.x === myX && p.y === myY)) {
       return res.json({ move: 'STAY', action: 'COLLECT' });
     }
 
-    // 2. Si un point est adjacent → aller dessus et collecter
+    // 2. Si un point est adjacent → y aller et collecter
     for (const d of dirs) {
       const nx = myX + d.dx;
       const ny = myY + d.dy;
-      if (isValid(nx, ny) && points.some(p => p.x === nx && p.y === ny) && !isDanger(nx, ny)) {
+      if (isValid(nx, ny) && points.some(p => p.x === nx && p.y === ny)) {
         return res.json({ move: d.move, action: 'COLLECT' });
       }
     }
@@ -64,17 +64,17 @@ app.get('/action', (req, res) => {
       }
     }
 
-    // 4. Si ennemi à distance = 2 et peu de bombes → poser bombe
+    // 4. Si ennemi à distance 2 et pas trop de bombes → poser bombe
     if (enemies.some(e => dist(me, e) === 2) && myBombs < 3) {
       return res.json({ move: 'STAY', action: 'BOMB', bombType: 'timer' });
     }
 
-    // 5. Aller vers le point le plus proche (en priorité trophées), en évitant le danger
+    // 5. Aller vers point le plus proche (même si bombes autour)
     let target = null;
     let minDist = Infinity;
     for (const p of points) {
       const d = dist(me, p);
-      if (d < minDist && !isDanger(p.x, p.y)) {
+      if (d < minDist) {
         target = p;
         minDist = d;
       }
@@ -96,14 +96,14 @@ app.get('/action', (req, res) => {
         if (dir) {
           const nx = myX + dir.dx;
           const ny = myY + dir.dy;
-          if (isValid(nx, ny) && !isDanger(nx, ny)) {
+          if (isValid(nx, ny)) {
             return res.json({ move: dir.move, action: 'NONE' });
           }
         }
       }
     }
 
-    // 6. Si aucune action sûre → STAY
+    // 6. Rien d’autre → STAY
     return res.json({ move: 'STAY', action: 'NONE' });
 
   } catch (e) {

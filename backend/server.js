@@ -20,9 +20,9 @@ app.get('/action', (req, res) => {
 
     const enemies = (game.bots || []).filter(b => b.id !== myId);
     const bombs = game.bombs || [];
-    const diamonds = game.diamonds || [];
     const trophies = game.trophies || [];
-    const points = [...trophies, ...diamonds];
+    const diamonds = game.diamonds || [];
+    const points = [...trophies, ...diamonds]; // trophées en priorité car listés avant
     const myBombs = bombs.filter(b => b.owner === myId).length;
 
     const gridWidth = game.width || 5;
@@ -38,59 +38,58 @@ app.get('/action', (req, res) => {
       { dx: 1, dy: 0, move: 'RIGHT' }
     ];
 
-    // Danger = bombes adjacentes uniquement
-    const isDanger = (x, y) => bombs.some(b =>
-      (Math.abs(b.x - x) + Math.abs(b.y - y)) === 1
-    );
+    const isDanger = (x, y) =>
+      bombs.some(b => Math.abs(b.x - x) + Math.abs(b.y - y) <= 1);
 
     const isEnemy = (x, y) => enemies.some(e => e.x === x && e.y === y);
 
-    // 1. Si sur un point → collecter
+    // 1. Sur un trophée ou diamant → collect
     if (points.some(p => p.x === myX && p.y === myY)) {
-      return res.json({ move: 'STAY', action: 'COLLECT' });
+      return res.json({ move: "STAY", action: "COLLECT" });
     }
 
-    // 2. Si un point est adjacent → y aller et collecter
+    // 2. Adjacent à un point ? → va dessus et collect
     for (const d of dirs) {
       const nx = myX + d.dx;
       const ny = myY + d.dy;
-      if (isValid(nx, ny) && points.some(p => p.x === nx && p.y === ny) && !isDanger(nx, ny)) {
-        return res.json({ move: d.move, action: 'COLLECT' });
+      if (isValid(nx, ny) && points.some(p => p.x === nx && p.y === ny)) {
+        return res.json({ move: d.move, action: "COLLECT" });
       }
     }
 
-    // 3. Si ennemi adjacent → attaque
+    // 3. Ennemi adjacent → attaque
     for (const d of dirs) {
       const nx = myX + d.dx;
       const ny = myY + d.dy;
       if (isEnemy(nx, ny)) {
-        return res.json({ move: d.move, action: 'ATTACK' });
+        return res.json({ move: d.move, action: "ATTACK" });
       }
     }
 
-    // 4. Si ennemi à distance 2 et moins de 3 bombes → poser bombe
-    if (enemies.some(e => dist(me, e) === 2) && myBombs < 3) {
-      return res.json({ move: 'STAY', action: 'BOMB', bombType: 'timer' });
+    // 4. Ennemi proche → pose bombe si pas trop
+    if (enemies.some(e => dist(me, e) <= 2) && myBombs < 3) {
+      return res.json({ move: "STAY", action: "BOMB", bombType: "timer" });
     }
 
-    // 5. Aller vers point le plus proche (évite seulement bombes à côté)
+    // 5. Cherche le point le plus proche
     let target = null;
-    let minDist = Infinity;
+    let minD = Infinity;
     for (const p of points) {
       const d = dist(me, p);
-      if (d < minDist) {
+      if (d < minD) {
+        minD = d;
         target = p;
-        minDist = d;
       }
     }
 
     if (target) {
       const dx = target.x - myX;
       const dy = target.y - myY;
-      const movePriority = Math.abs(dx) >= Math.abs(dy) ? ['x', 'y'] : ['y', 'x'];
 
-      for (const axis of movePriority) {
-        let dir;
+      const preferred = Math.abs(dx) >= Math.abs(dy) ? ['x', 'y'] : ['y', 'x'];
+
+      for (const axis of preferred) {
+        let dir = null;
         if (axis === 'x' && dx !== 0) {
           dir = dirs.find(d => d.dx === Math.sign(dx));
         }
@@ -101,17 +100,18 @@ app.get('/action', (req, res) => {
           const nx = myX + dir.dx;
           const ny = myY + dir.dy;
           if (isValid(nx, ny) && !isDanger(nx, ny)) {
-            return res.json({ move: dir.move, action: 'NONE' });
+            return res.json({ move: dir.move, action: "NONE" });
           }
         }
       }
     }
 
-    return res.json({ move: 'STAY', action: 'NONE' });
+    // Sinon, reste là
+    return res.json({ move: "STAY", action: "NONE" });
 
   } catch (e) {
-    console.error('Erreur :', e);
-    return res.json({ move: 'STAY', action: 'NONE' });
+    console.error("Erreur:", e);
+    return res.json({ move: "STAY", action: "NONE" });
   }
 });
 

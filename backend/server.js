@@ -20,181 +20,21 @@ function isValidPosition(x, y, grid) {
     return x >= 0 && x < grid[0].length && y >= 0 && y < grid.length;
 }
 
-// Fonction pour analyser l'environnement autour du bot
-function analyzeEnvironment(botX, botY, grid) {
-    const environment = {
-        currentCell: grid[botY][botX],
-        adjacentCells: {},
-        nearbyThreats: [],
-        nearbyRewards: []
-    };
-
-    const directions = [
-        { dx: 0, dy: -1, name: 'UP' },
-        { dx: 0, dy: 1, name: 'DOWN' },
-        { dx: -1, dy: 0, name: 'LEFT' },
-        { dx: 1, dy: 0, name: 'RIGHT' }
-    ];
-
-    // Analyser les cellules adjacentes
-    directions.forEach(dir => {
-        const newX = botX + dir.dx;
-        const newY = botY + dir.dy;
-        
-        if (isValidPosition(newX, newY, grid)) {
-            const cell = grid[newY][newX];
-            environment.adjacentCells[dir.name] = {
-                x: newX,
-                y: newY,
-                cell: cell,
-                hasBomb: cell.bombs && cell.bombs.length > 0,
-                hasPoint: cell.points && cell.points.length > 0,
-                hasBot: cell.bots && cell.bots.length > 0,
-                safety: calculateCellSafety(newX, newY, grid)
-            };
-        } else {
-            environment.adjacentCells[dir.name] = null; // Hors limites
-        }
-    });
-
-    // Analyser les menaces et récompenses dans un rayon plus large
-    for (let y = Math.max(0, botY - 2); y <= Math.min(grid.length - 1, botY + 2); y++) {
-        for (let x = Math.max(0, botX - 2); x <= Math.min(grid[0].length - 1, botX + 2); x++) {
-            const cell = grid[y][x];
-            const distance = manhattanDistance(botX, botY, x, y);
-            
-            if (cell.bombs && cell.bombs.length > 0) {
-                environment.nearbyThreats.push({
-                    x, y, distance,
-                    type: 'bomb',
-                    bombType: cell.bombs[0].bombType || 'proximity'
-                });
-            }
-            
-            if (cell.points && cell.points.length > 0) {
-                const isTrophy = cell.points.some(p => p.id === 'trophy');
-                environment.nearbyRewards.push({
-                    x, y, distance,
-                    type: isTrophy ? 'trophy' : 'point',
-                    value: isTrophy ? 20 : 1
-                });
-            }
-            
-            if (cell.bots && cell.bots.length > 0 && distance > 0) {
-                environment.nearbyThreats.push({
-                    x, y, distance,
-                    type: 'bot'
-                });
-            }
-        }
-    }
-
-    return environment;
+// Fonction pour vérifier si une cellule est dangereuse (contient une bombe)
+function isDangerous(x, y, grid) {
+    if (!isValidPosition(x, y, grid)) return true;
+    
+    const cell = grid[y][x];
+    // Vérifier s'il y a une bombe sur cette cellule
+    return cell.bombs && cell.bombs.length > 0;
 }
 
-// Fonction pour calculer la sécurité d'une cellule
-function calculateCellSafety(x, y, grid) {
-    let safety = 100;
+// Fonction pour vérifier si une cellule a des points
+function hasPoints(x, y, grid) {
+    if (!isValidPosition(x, y, grid)) return false;
     
-    // Vérifier les bombes dans un rayon de 2 cases
-    for (let dy = -2; dy <= 2; dy++) {
-        for (let dx = -2; dx <= 2; dx++) {
-            const checkX = x + dx;
-            const checkY = y + dy;
-            
-            if (isValidPosition(checkX, checkY, grid)) {
-                const cell = grid[checkY][checkX];
-                if (cell.bombs && cell.bombs.length > 0) {
-                    const distance = Math.abs(dx) + Math.abs(dy);
-                    safety -= Math.max(0, 50 - distance * 10);
-                }
-            }
-        }
-    }
-    
-    return Math.max(0, safety);
-}
-
-// Fonction pour trouver le meilleur mouvement
-function findBestMove(botX, botY, environment, gameState) {
-    const moves = ['UP', 'DOWN', 'LEFT', 'RIGHT', 'STAY'];
-    const moveScores = {};
-    
-    moves.forEach(move => {
-        let score = 0;
-        
-        if (move === 'STAY') {
-            score = environment.currentCell.points ? 10 : -5;
-        } else {
-            const adjacent = environment.adjacentCells[move];
-            if (!adjacent) {
-                score = -1000; // Hors limites
-            } else {
-                // Score basé sur la sécurité
-                score += adjacent.safety;
-                
-                // Bonus pour les points
-                if (adjacent.hasPoint) {
-                    score += 30;
-                }
-                
-                // Malus pour les bombes
-                if (adjacent.hasBomb) {
-                    score -= 80;
-                }
-                
-                // Malus pour les autres bots
-                if (adjacent.hasBot) {
-                    score -= 20;
-                }
-            }
-        }
-        
-        moveScores[move] = score;
-    });
-    
-    // Trouver le mouvement avec le meilleur score
-    return Object.keys(moveScores).reduce((best, move) => 
-        moveScores[move] > moveScores[best] ? move : best
-    );
-}
-
-// Fonction pour déterminer l'action à effectuer
-function determineAction(botX, botY, environment, gameState) {
-    const currentCell = environment.currentCell;
-    
-    // Si on est sur un point, le collecter
-    if (currentCell.points && currentCell.points.length > 0) {
-        return 'COLLECT';
-    }
-    
-    // Si un bot ennemi est adjacent, l'attaquer
-    const adjacentBots = Object.values(environment.adjacentCells)
-        .filter(cell => cell && cell.hasBot);
-    if (adjacentBots.length > 0) {
-        return 'ATTACK';
-    }
-    
-    // Stratégie de placement de bombes
-    if (gameState.you.bombs > 0) {
-        // Placer une bombe si on est près d'un point stratégique et qu'il y a des ennemis
-        const nearbyBots = environment.nearbyThreats.filter(t => t.type === 'bot' && t.distance <= 2);
-        const nearbyPoints = environment.nearbyRewards.filter(r => r.distance <= 1);
-        
-        if (nearbyBots.length > 0 && nearbyPoints.length > 0) {
-            return 'BOMB';
-        }
-        
-        // Placer une bombe de proximité près des passages étroits
-        const safeAdjacentCells = Object.values(environment.adjacentCells)
-            .filter(cell => cell && cell.safety > 50).length;
-        
-        if (safeAdjacentCells <= 2 && nearbyBots.length > 0) {
-            return 'BOMB';
-        }
-    }
-    
-    return 'NONE';
+    const cell = grid[y][x];
+    return cell.points && cell.points.length > 0;
 }
 
 app.get('/action', (req, res) => {
@@ -203,68 +43,139 @@ app.get('/action', (req, res) => {
         const { x: botX, y: botY } = gameState.you;
         const grid = gameState.grid;
 
-        // Analyser l'environnement
-        const environment = analyzeEnvironment(botX, botY, grid);
-        
-        // Déterminer le meilleur mouvement
-        let move = findBestMove(botX, botY, environment, gameState);
-        
-        // Si aucun mouvement sûr n'est trouvé, chercher le point le plus proche (comportement de fallback)
-        if (move === 'STAY' && !environment.currentCell.points) {
-            let target = null;
-            let minDist = Infinity;
+        console.log(`Tour ${gameState.turnNumber}: Bot à la position (${botX}, ${botY})`);
 
-            // Prioriser les trophées, puis les points normaux
-            const allRewards = [...environment.nearbyRewards];
-            if (gameState.megaPoint) {
-                allRewards.push({
-                    x: gameState.megaPoint.x,
-                    y: gameState.megaPoint.y,
-                    distance: manhattanDistance(botX, botY, gameState.megaPoint.x, gameState.megaPoint.y),
-                    type: 'mega',
-                    value: 20
-                });
-            }
+        // Vérifier d'abord si on est sur un point pour le collecter
+        if (hasPoints(botX, botY, grid)) {
+            console.log("Point détecté sur la position actuelle - COLLECT");
+            return res.json({ move: "STAY", action: "COLLECT" });
+        }
 
-            // Trier par valeur puis par distance
-            allRewards.sort((a, b) => {
-                if (a.value !== b.value) return b.value - a.value;
-                return a.distance - b.distance;
-            });
+        const directions = [
+            { dx: 0, dy: -1, move: 'UP' },
+            { dx: 0, dy: 1, move: 'DOWN' },
+            { dx: -1, dy: 0, move: 'LEFT' },
+            { dx: 1, dy: 0, move: 'RIGHT' }
+        ];
 
-            if (allRewards.length > 0) {
-                target = allRewards[0];
-                const dx = target.x - botX;
-                const dy = target.y - botY;
+        // Trouver tous les points disponibles
+        let allTargets = [];
 
-                if (Math.abs(dx) > Math.abs(dy)) {
-                    move = dx > 0 ? 'RIGHT' : 'LEFT';
-                } else if (dy !== 0) {
-                    move = dy > 0 ? 'DOWN' : 'UP';
-                }
-
-                // Vérifier que le mouvement est sûr
-                const targetCell = environment.adjacentCells[move];
-                if (targetCell && targetCell.safety < 30) {
-                    move = 'STAY'; // Rester sur place si c'est dangereux
+        // Ajouter les points normaux
+        for (let y = 0; y < grid.length; y++) {
+            for (let x = 0; x < grid[y].length; x++) {
+                const cell = grid[y][x];
+                if (cell.points && cell.points.length > 0) {
+                    const isTrophy = cell.points.some(p => p.id === 'trophy');
+                    const dist = manhattanDistance(botX, botY, x, y);
+                    allTargets.push({
+                        x, y, dist,
+                        priority: isTrophy ? 20 : 1, // Trophée = 20 points, point normal = 1 point
+                        type: isTrophy ? 'trophy' : 'point'
+                    });
                 }
             }
         }
-        
+
+        // Ajouter le mega point s'il existe
+        if (gameState.megaPoint) {
+            const dist = manhattanDistance(botX, botY, gameState.megaPoint.x, gameState.megaPoint.y);
+            allTargets.push({
+                x: gameState.megaPoint.x,
+                y: gameState.megaPoint.y,
+                dist,
+                priority: 20,
+                type: 'mega'
+            });
+        }
+
+        // Trier par priorité puis par distance
+        allTargets.sort((a, b) => {
+            if (a.priority !== b.priority) return b.priority - a.priority;
+            return a.dist - b.dist;
+        });
+
+        console.log(`Targets trouvés: ${allTargets.length}`);
+        if (allTargets.length > 0) {
+            console.log(`Meilleur target: (${allTargets[0].x}, ${allTargets[0].y}) - ${allTargets[0].type} - distance: ${allTargets[0].dist}`);
+        }
+
+        let bestMove = 'STAY';
+
+        if (allTargets.length > 0) {
+            const target = allTargets[0];
+            const dx = target.x - botX;
+            const dy = target.y - botY;
+
+            // Déterminer la direction prioritaire
+            let possibleMoves = [];
+
+            if (dx > 0) possibleMoves.push({ move: 'RIGHT', dx: 1, dy: 0 });
+            if (dx < 0) possibleMoves.push({ move: 'LEFT', dx: -1, dy: 0 });
+            if (dy > 0) possibleMoves.push({ move: 'DOWN', dx: 0, dy: 1 });
+            if (dy < 0) possibleMoves.push({ move: 'UP', dx: 0, dy: -1 });
+
+            // Trier les mouvements par efficacité (distance réduite)
+            possibleMoves.sort((a, b) => {
+                const newDistA = manhattanDistance(botX + a.dx, botY + a.dy, target.x, target.y);
+                const newDistB = manhattanDistance(botX + b.dx, botY + b.dy, target.x, target.y);
+                return newDistA - newDistB;
+            });
+
+            // Choisir le premier mouvement sûr
+            for (const move of possibleMoves) {
+                const newX = botX + move.dx;
+                const newY = botY + move.dy;
+                
+                if (isValidPosition(newX, newY, grid) && !isDangerous(newX, newY, grid)) {
+                    bestMove = move.move;
+                    console.log(`Mouvement choisi: ${bestMove} vers (${newX}, ${newY})`);
+                    break;
+                }
+            }
+
+            // Si aucun mouvement sûr vers la cible, essayer les autres directions
+            if (bestMove === 'STAY') {
+                for (const dir of directions) {
+                    const newX = botX + dir.dx;
+                    const newY = botY + dir.dy;
+                    
+                    if (isValidPosition(newX, newY, grid) && !isDangerous(newX, newY, grid)) {
+                        bestMove = dir.move;
+                        console.log(`Mouvement de sécurité: ${bestMove} vers (${newX}, ${newY})`);
+                        break;
+                    }
+                }
+            }
+        }
+
         // Déterminer l'action
-        const action = determineAction(botX, botY, environment, gameState);
+        let action = "NONE";
         
-        // Log pour debug (optionnel)
-        console.log(`Tour ${gameState.turnNumber}: Position (${botX},${botY}) -> Mouvement: ${move}, Action: ${action}`);
-        
+        // Vérifier s'il y a des bots ennemis adjacents pour les attaquer
+        for (const dir of directions) {
+            const checkX = botX + dir.dx;
+            const checkY = botY + dir.dy;
+            
+            if (isValidPosition(checkX, checkY, grid)) {
+                const cell = grid[checkY][checkX];
+                if (cell.bots && cell.bots.length > 0) {
+                    action = "ATTACK";
+                    console.log("Bot ennemi détecté - ATTACK");
+                    break;
+                }
+            }
+        }
+
+        console.log(`Réponse finale: move=${bestMove}, action=${action}`);
+
         return res.json({ 
-            move, 
-            action,
-            // Informations supplémentaires pour le debug
+            move: bestMove, 
+            action: action,
             debug: {
-                currentSafety: environment.currentCell ? calculateCellSafety(botX, botY, grid) : 0,
-                threatsNearby: environment.nearbyThreats.length,
-                rewardsNearby: environment.nearbyRewards.length
+                position: `(${botX}, ${botY})`,
+                targetsFound: allTargets.length,
+                bestTarget: allTargets.length > 0 ? `(${allTargets[0].x}, ${allTargets[0].y})` : 'none'
             }
         });
 

@@ -10,9 +10,9 @@ app.get("/", (req, res) => {
   res.send("Bot-War API is running. Try /action");
 });
 
-app.get('/action', (req, res) => {
+app.get("/action", (req, res) => {
   try {
-    const game = JSON.parse(req.headers['x-game-state']);
+    const game = JSON.parse(req.headers["x-game-state"]);
     const me = game.you;
     const myId = me.id;
     const myX = me.x;
@@ -22,7 +22,7 @@ app.get('/action', (req, res) => {
     const bombs = game.bombs || [];
     const trophies = game.trophies || [];
     const diamonds = game.diamonds || [];
-    const points = [...trophies, ...diamonds];
+    const points = [...trophies, ...diamonds]; // priorité trophée
     const myBombs = bombs.filter(b => b.owner === myId).length;
 
     const gridWidth = game.width || 5;
@@ -32,32 +32,31 @@ app.get('/action', (req, res) => {
     const dist = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 
     const dirs = [
-      { dx: 0, dy: -1, move: 'UP' },
-      { dx: 0, dy: 1, move: 'DOWN' },
-      { dx: -1, dy: 0, move: 'LEFT' },
-      { dx: 1, dy: 0, move: 'RIGHT' }
+      { dx: 0, dy: -1, move: "UP" },
+      { dx: 0, dy: 1, move: "DOWN" },
+      { dx: -1, dy: 0, move: "LEFT" },
+      { dx: 1, dy: 0, move: "RIGHT" },
     ];
 
     const isDanger = (x, y) =>
-      bombs.some(b => Math.abs(b.x - x) + Math.abs(b.y - y) <= 1);
+      bombs.some(b => dist({ x, y }, b) <= 1); // bombe sur ou adjacent
 
     const isEnemy = (x, y) => enemies.some(e => e.x === x && e.y === y);
 
-    // 1. Sur un point → collect
-    if (points.some(p => p.x === myX && p.y === myY)) {
-      return res.json({ move: "STAY", action: "COLLECT" });
-    }
-
-    // 2. Adjacent à un point → va dessus et collect
+    // 1. Point adjacent ? → go collect (sans aller sur bombe)
     for (const d of dirs) {
       const nx = myX + d.dx;
       const ny = myY + d.dy;
-      if (isValid(nx, ny) && points.some(p => p.x === nx && p.y === ny) && !isDanger(nx, ny)) {
+      if (
+        isValid(nx, ny) &&
+        points.some(p => p.x === nx && p.y === ny) &&
+        !isDanger(nx, ny)
+      ) {
         return res.json({ move: d.move, action: "COLLECT" });
       }
     }
 
-    // 3. Ennemi adjacent → attaque
+    // 2. Ennemi adjacent → attaque
     for (const d of dirs) {
       const nx = myX + d.dx;
       const ny = myY + d.dy;
@@ -66,12 +65,12 @@ app.get('/action', (req, res) => {
       }
     }
 
-    // 4. Ennemi proche → bombe
+    // 3. Ennemi proche ? → poser bombe si on a moins de 3
     if (enemies.some(e => dist(me, e) <= 2) && myBombs < 3) {
       return res.json({ move: "STAY", action: "BOMB", bombType: "timer" });
     }
 
-    // 5. Aller vers point le plus proche (sans danger)
+    // 4. Aller vers point le plus proche sans danger
     let target = null;
     let minD = Infinity;
     for (const p of points) {
@@ -86,36 +85,33 @@ app.get('/action', (req, res) => {
       const dx = target.x - myX;
       const dy = target.y - myY;
 
-      const directions = dirs
-        .map(d => ({
-          ...d,
-          nx: myX + d.dx,
-          ny: myY + d.dy,
-          distance: dist({ x: myX + d.dx, y: myY + d.dy }, target)
-        }))
-        .filter(d => isValid(d.nx, d.ny) && !isDanger(d.nx, d.ny))
-        .sort((a, b) => a.distance - b.distance);
+      const preferred = Math.abs(dx) >= Math.abs(dy) ? ["x", "y"] : ["y", "x"];
 
-      if (directions.length > 0) {
-        return res.json({ move: directions[0].move, action: "NONE" });
+      for (const axis of preferred) {
+        let dir = null;
+        if (axis === "x" && dx !== 0) {
+          dir = dirs.find(d => d.dx === Math.sign(dx));
+        }
+        if (axis === "y" && dy !== 0) {
+          dir = dirs.find(d => d.dy === Math.sign(dy));
+        }
+        if (dir) {
+          const nx = myX + dir.dx;
+          const ny = myY + dir.dy;
+
+          if (isValid(nx, ny) && !isDanger(nx, ny)) {
+            const isPoint = points.some(p => p.x === nx && p.y === ny);
+            return res.json({
+              move: dir.move,
+              action: isPoint ? "COLLECT" : "NONE",
+            });
+          }
+        }
       }
     }
 
-    // 6. Si aucun point trouvé ou bloqué, bouger vers case safe aléatoire
-    const safeMoves = dirs.filter(d => {
-      const nx = myX + d.dx;
-      const ny = myY + d.dy;
-      return isValid(nx, ny) && !isDanger(nx, ny);
-    });
-
-    if (safeMoves.length > 0) {
-      const move = safeMoves[Math.floor(Math.random() * safeMoves.length)].move;
-      return res.json({ move, action: "NONE" });
-    }
-
-    // 7. Sinon reste
+    // 5. Aucun objectif safe ? → rester
     return res.json({ move: "STAY", action: "NONE" });
-
   } catch (e) {
     console.error("Erreur:", e);
     return res.json({ move: "STAY", action: "NONE" });

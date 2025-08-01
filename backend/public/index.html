@@ -1,15 +1,22 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>BotWar Manual Controller</title>
   <style>
     button { margin: 5px; }
-    #log { background: #f0f0f0; padding: 10px; height: 150px; overflow-y: auto; }
+    #log, #actionPreview {
+      background: #f0f0f0;
+      padding: 10px;
+      margin-top: 10px;
+      height: 150px;
+      overflow-y: auto;
+    }
   </style>
 </head>
 <body>
   <h1>BotWar Manual Controller</h1>
+
   <div>
     <h3>Move: <span id="move">STAY</span></h3>
     <button onclick="setMove('UP')">UP</button>
@@ -18,6 +25,7 @@
     <button onclick="setMove('RIGHT')">RIGHT</button>
     <button onclick="setMove('STAY')">STAY</button>
   </div>
+
   <div>
     <h3>Action: <span id="action">NONE</span></h3>
     <button onclick="setAction('COLLECT')">Collect</button>
@@ -25,13 +33,19 @@
     <button onclick="setAction('BOMB')">Bomb</button>
     <button onclick="setAction('NONE')">None</button>
   </div>
+
   <div id="bomb-controls" style="display:none;">
     <h3>Bomb Type: <span id="bombType">proximity</span></h3>
     <button onclick="setBombType('proximity')">Proximity</button>
     <button onclick="setBombType('timer')">Timer</button>
   </div>
+
   <button id="confirm">Send Command</button>
+
   <pre id="log"></pre>
+
+  <h2>🎯 Live Command (/action):</h2>
+  <pre id="actionPreview">Chargement...</pre>
 
   <script>
     let move = 'STAY';
@@ -75,6 +89,20 @@
           log('Error: ' + err);
         });
     });
+
+    // 🔁 Actualiser automatiquement le contenu de /action toutes les 2 secondes
+    async function refreshActionPreview() {
+      try {
+        const res = await fetch('/action');
+        const data = await res.json();
+        document.getElementById('actionPreview').textContent = JSON.stringify(data, null, 2);
+      } catch (e) {
+        document.getElementById('actionPreview').textContent = 'Erreur de connexion à /action';
+      }
+    }
+
+    setInterval(refreshActionPreview, 2000);
+    refreshActionPreview(); // premier appel
   </script>
 </body>
 </html>

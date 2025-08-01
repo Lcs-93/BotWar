@@ -11,11 +11,13 @@ app.use(express.static(path.join(__dirname, "public")));
 
 let nextCommand = { move: "STAY", action: "NONE" };
 
-app.post("/command", (req, res) => {
-  const { move, action } = req.body || {};
+app.get("/command", (req, res) => {
+  const { move, action } = req.query || {};
   if (move) nextCommand.move = move;
   if (action) nextCommand.action = action;
-  console.log(`✅ Command received: move=${nextCommand.move}, action=${nextCommand.action}`);
+  console.log(
+    `✅ Command received: move=${nextCommand.move}, action=${nextCommand.action}`
+  );
   res.json({ ok: true });
 });
 

@@ -52,15 +52,13 @@
     }
 
     document.getElementById('confirm').addEventListener('click', () => {
-      fetch('/command', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ move, action })
-      }).then(() => {
-        log('Command sent: ' + move + ' / ' + action);
-      }).catch(err => {
-        log('Error: ' + err);
-      });
+      fetch(`/command?move=${move}&action=${action}`)
+        .then(() => {
+          log('Command sent: ' + move + ' / ' + action);
+        })
+        .catch(err => {
+          log('Error: ' + err);
+        });
     });
   </script>
 </body>

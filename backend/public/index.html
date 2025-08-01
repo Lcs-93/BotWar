@@ -65,7 +65,7 @@
     }
 
     document.getElementById('confirm').addEventListener('click', () => {
-      const url = `/command?move=${move}&action=${action}` +
+      const url = `/action?move=${move}&action=${action}` +
         (action === 'BOMB' ? `&bombType=${bombType}` : '');
       fetch(url)
         .then(() => {

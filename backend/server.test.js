@@ -1,35 +1,52 @@
-const request = require('supertest');
-const app = require('./server');
+const request = require("supertest");
+const app = require("./server");
 
-describe('manual command API', () => {
-  beforeEach(async () => {
-    await request(app).get('/action');
+describe("BotWar /action API", () => {
+  test("returns default command if no query is provided", async () => {
+    const res = await request(app).get("/action");
+    expect(res.body).toEqual({ move: "STAY", action: "NONE" });
   });
 
-  test('returns default command', async () => {
-    const res = await request(app).get('/action');
-    expect(res.body).toEqual({ move: 'STAY', action: 'NONE' });
+  test("returns provided move and action", async () => {
+    const res = await request(app)
+      .get("/action")
+      .query({ move: "UP", action: "COLLECT" });
+
+    expect(res.body).toEqual({ move: "UP", action: "COLLECT" });
   });
 
-  test('stores command and resets after retrieval', async () => {
-    await request(app).get('/command').query({ move: 'UP', action: 'COLLECT' });
-    let res = await request(app).get('/action');
-    expect(res.body).toEqual({ move: 'UP', action: 'COLLECT' });
-    res = await request(app).get('/action');
-    expect(res.body).toEqual({ move: 'STAY', action: 'NONE' });
+  test("includes bombType only when action is BOMB", async () => {
+    const res = await request(app)
+      .get("/action")
+      .query({ move: "LEFT", action: "BOMB", bombType: "proximity" });
+
+    expect(res.body).toEqual({
+      move: "LEFT",
+      action: "BOMB",
+      bombType: "proximity"
+    });
   });
 
-  test('handles bomb types', async () => {
-    await request(app)
-      .get('/command')
-      .query({ move: 'LEFT', action: 'BOMB', bombType: 'proximity' });
-    let res = await request(app).get('/action');
-    expect(res.body).toEqual({ move: 'LEFT', action: 'BOMB', bombType: 'proximity' });
+  test("defaults bombType to proximity if not provided", async () => {
+    const res = await request(app)
+      .get("/action")
+      .query({ move: "RIGHT", action: "BOMB" });
 
-    await request(app)
-      .get('/command')
-      .query({ move: 'RIGHT', action: 'BOMB', bombType: 'timer' });
-    res = await request(app).get('/action');
-    expect(res.body).toEqual({ move: 'RIGHT', action: 'BOMB', bombType: 'timer' });
+    expect(res.body).toEqual({
+      move: "RIGHT",
+      action: "BOMB",
+      bombType: "proximity"
+    });
+  });
+
+  test("does not include bombType if action is not BOMB", async () => {
+    const res = await request(app)
+      .get("/action")
+      .query({ move: "DOWN", action: "ATTACK" });
+
+    expect(res.body).toEqual({
+      move: "DOWN",
+      action: "ATTACK"
+    });
   });
 });

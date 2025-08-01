@@ -9,16 +9,32 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-app.get("/action", (req, res) => {
-  const { move = "STAY", action = "NONE", bombType } = req.query;
+// Dernière commande envoyée manuellement
+let lastCommand = {
+  move: "STAY",
+  action: "NONE",
+};
 
-  const response = { move, action };
-  if (action === "BOMB") {
-    response.bombType = bombType || "proximity";
+// Endpoint /action
+app.get("/action", (req, res) => {
+  const { move, action, bombType } = req.query;
+
+  // Si des paramètres sont fournis, c’est une confirmation manuelle
+  if (move && action) {
+    lastCommand = { move, action };
+
+    if (action === "BOMB") {
+      lastCommand.bombType = bombType || "proximity";
+    } else {
+      delete lastCommand.bombType;
+    }
+
+    console.log("✅ Command confirmed:", lastCommand);
+  } else {
+    console.log("📤 Sending current command:", lastCommand);
   }
 
-  console.log("✅ Received command:", response);
-  res.json(response);
+  res.json(lastCommand);
 });
 
 if (require.main === module) {

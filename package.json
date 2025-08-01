@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "node -e \"console.log('no tests')\"",
+    "test": "jest",
     "server": "nodemon backend/server.js"
   },
   "keywords": [],
@@ -14,5 +14,9 @@
     "cors": "^2.8.5",
     "express": "^5.1.0",
     "nodemon": "^3.1.10"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "supertest": "^6.3.3"
   }
 }

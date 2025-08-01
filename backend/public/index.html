@@ -25,12 +25,18 @@
     <button onclick="setAction('BOMB')">Bomb</button>
     <button onclick="setAction('NONE')">None</button>
   </div>
+  <div id="bomb-controls" style="display:none;">
+    <h3>Bomb Type: <span id="bombType">proximity</span></h3>
+    <button onclick="setBombType('proximity')">Proximity</button>
+    <button onclick="setBombType('timer')">Timer</button>
+  </div>
   <button id="confirm">Send Command</button>
   <pre id="log"></pre>
 
   <script>
     let move = 'STAY';
     let action = 'NONE';
+    let bombType = 'proximity';
 
     function log(msg) {
       const box = document.getElementById('log');
@@ -48,13 +54,22 @@
     function setAction(a) {
       action = a;
       document.getElementById('action').textContent = a;
+      document.getElementById('bomb-controls').style.display = a === 'BOMB' ? 'block' : 'none';
       log('Action set to ' + a);
     }
 
+    function setBombType(b) {
+      bombType = b;
+      document.getElementById('bombType').textContent = b;
+      log('Bomb type set to ' + b);
+    }
+
     document.getElementById('confirm').addEventListener('click', () => {
-      fetch(`/command?move=${move}&action=${action}`)
+      const url = `/command?move=${move}&action=${action}` +
+        (action === 'BOMB' ? `&bombType=${bombType}` : '');
+      fetch(url)
         .then(() => {
-          log('Command sent: ' + move + ' / ' + action);
+          log('Command sent: ' + move + ' / ' + action + (action === 'BOMB' ? ' / ' + bombType : ''));
         })
         .catch(err => {
           log('Error: ' + err);

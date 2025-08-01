@@ -1,29 +1,49 @@
 const express = require("express");
 const cors = require("cors");
-const { decideMove } = require("./logic");
+
+const path = require("path");
 
 const port = process.env.PORT || 3000;
 const app = express();
 
 app.use(cors());
 app.use(express.json());
+app.use(express.static(path.join(__dirname, "public")));
 
-app.get("/", (req, res) => {
-  res.send("Bot-War API is running. Try /action");
-});
+let nextCommand = { move: "STAY", action: "NONE" };
 
-app.get("/action", (req, res) => {
-  try {
-    const game = JSON.parse(req.headers["x-game-state"]);
-    const decision = decideMove(game);
-    return res.json(decision);
-  } catch (e) {
-    console.error("Erreur:", e);
-    return res.json({ move: "STAY", action: "NONE" });
+app.get("/command", (req, res) => {
+  const { move, action, bombType } = req.query || {};
+  if (move) nextCommand.move = move;
+  if (action) nextCommand.action = action;
+  if (action === "BOMB") {
+    nextCommand.bombType = bombType || "proximity";
+  } else {
+    delete nextCommand.bombType;
   }
+  console.log(
+    `✅ Command received: move=${nextCommand.move}, action=${nextCommand.action}` +
+      (nextCommand.bombType ? `, bombType=${nextCommand.bombType}` : "")
+  );
+  res.json({ ok: true });
 });
 
-app.listen(port, () => {
-  console.log(`🤖 Bot-War Server démarré sur le port ${port}`);
+
+app.get("/action", (_req, res) => {
+  console.log(
+    `➡️ Sending command: move=${nextCommand.move}, action=${nextCommand.action}` +
+      (nextCommand.bombType ? `, bombType=${nextCommand.bombType}` : "")
+  );
+  const command = nextCommand;
+  nextCommand = { move: "STAY", action: "NONE" };
+  res.json(command);
 });
+
+if (require.main === module) {
+  app.listen(port, () => {
+    console.log(`🎮 Manual Bot-War server running on port ${port}`);
+  });
+}
+
+module.exports = app;
 

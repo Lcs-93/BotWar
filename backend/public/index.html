@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>BotWar Manual Controller</title>
+  <style>
+    button { margin: 5px; }
+    #log { background: #f0f0f0; padding: 10px; height: 150px; overflow-y: auto; }
+  </style>
+</head>
+<body>
+  <h1>BotWar Manual Controller</h1>
+  <div>
+    <h3>Move: <span id="move">STAY</span></h3>
+    <button onclick="setMove('UP')">UP</button>
+    <button onclick="setMove('DOWN')">DOWN</button>
+    <button onclick="setMove('LEFT')">LEFT</button>
+    <button onclick="setMove('RIGHT')">RIGHT</button>
+    <button onclick="setMove('STAY')">STAY</button>
+  </div>
+  <div>
+    <h3>Action: <span id="action">NONE</span></h3>
+    <button onclick="setAction('COLLECT')">Collect</button>
+    <button onclick="setAction('ATTACK')">Attack</button>
+    <button onclick="setAction('BOMB')">Bomb</button>
+    <button onclick="setAction('NONE')">None</button>
+  </div>
+  <div id="bomb-controls" style="display:none;">
+    <h3>Bomb Type: <span id="bombType">proximity</span></h3>
+    <button onclick="setBombType('proximity')">Proximity</button>
+    <button onclick="setBombType('timer')">Timer</button>
+  </div>
+  <button id="confirm">Send Command</button>
+  <pre id="log"></pre>
+
+  <script>
+    let move = 'STAY';
+    let action = 'NONE';
+    let bombType = 'proximity';
+
+    function log(msg) {
+      const box = document.getElementById('log');
+      box.textContent += msg + '\n';
+      box.scrollTop = box.scrollHeight;
+      console.log(msg);
+    }
+
+    function setMove(m) {
+      move = m;
+      document.getElementById('move').textContent = m;
+      log('Move set to ' + m);
+    }
+
+    function setAction(a) {
+      action = a;
+      document.getElementById('action').textContent = a;
+      document.getElementById('bomb-controls').style.display = a === 'BOMB' ? 'block' : 'none';
+      log('Action set to ' + a);
+    }
+
+    function setBombType(b) {
+      bombType = b;
+      document.getElementById('bombType').textContent = b;
+      log('Bomb type set to ' + b);
+    }
+
+    document.getElementById('confirm').addEventListener('click', () => {
+      const url = `/command?move=${move}&action=${action}` +
+        (action === 'BOMB' ? `&bombType=${bombType}` : '');
+      fetch(url)
+        .then(() => {
+          log('Command sent: ' + move + ' / ' + action + (action === 'BOMB' ? ' / ' + bombType : ''));
+        })
+        .catch(err => {
+          log('Error: ' + err);
+        });
+    });
+  </script>
+</body>
+</html>

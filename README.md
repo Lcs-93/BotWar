@@ -1,22 +1,19 @@
-# 🕹️ BotWar  
+# 🕹️ BotWar - Lancer l'application
 
-BotWar est un projet en **Node.js** qui implémente un bot capable de se déplacer, poser des bombes et interagir sur un plateau de jeu.  
-Il intègre des **tests unitaires avec Jest**, un déploiement via **Docker** et une automatisation avec **GitHub Actions (CI/CD)**.  
+## 🚀 Prérequis
+- Node.js installé (version 18 recommandée)  
+- npm installé  
+- (optionnel) Docker si vous voulez lancer l'app en conteneur  
 
 ---
 
-## 🚀 Installation  
+## ▶️ Lancer en local
 
-### 1. Cloner le projet  
+### 1. Installer les dépendances
 ```bash
-git clone https://github.com/Lcs-93/BotWar.git
-cd BotWar
 npm install
-npm test
- PASS  ./bot.test.js
-  ✓ le bot peut se déplacer (10 ms)
-  ✓ le bot pose une bombe correctement (5 ms)
-docker build -t botwar .
-docker run --rm botwar
+npm start
 Bot-War server running on port 3000
-docker images
+npm test
+docker build -t botwar .
+docker run --rm -p 3000:3000 botwar
